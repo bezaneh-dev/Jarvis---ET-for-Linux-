@@ -111,8 +111,8 @@ def tool_shell(command_text: str) -> tuple[RiskLevel, Callable[[], ToolResult]]:
     if executable not in settings.allowed_commands:
         return RiskLevel.medium, lambda: ToolResult(
             ok=False,
-            summary="Command is not in the allowlist.",
-            data={"allowed": list(settings.allowed_commands)},
+            summary=f"'{executable}' is blocked. Use one of the approved local commands instead.",
+            data={"allowed": list(settings.allowed_commands), "requested": executable},
         )
 
     risk = RiskLevel.low if executable in {"ls", "pwd", "whoami", "date", "uptime"} else RiskLevel.medium

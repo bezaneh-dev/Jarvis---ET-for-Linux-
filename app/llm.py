@@ -13,6 +13,8 @@ class LLMRouter:
 
     def ask(self, prompt: str) -> tuple[str, str | None]:
         mode = settings.ai_route_mode
+        if mode == "off":
+            return "AI mode is off.", None
         if mode == "local":
             text = self._ask_ollama(prompt)
             return text, "ollama"
@@ -32,6 +34,9 @@ class LLMRouter:
                 return text, "openai"
             except Exception:
                 return "Both local and cloud models are unavailable right now.", None
+
+    def is_enabled(self) -> bool:
+        return settings.ai_route_mode != "off"
 
     def _ask_ollama(self, prompt: str) -> str:
         payload: dict[str, Any] = {

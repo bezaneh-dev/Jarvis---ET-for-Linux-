@@ -3,6 +3,8 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
+from app.capabilities import detect_capabilities, format_capability_report
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT_DIR / ".env"
 
@@ -52,10 +54,13 @@ def _choose_provider(default: str) -> str:
 
 def run_setup() -> None:
     values = _parse_env(ENV_FILE)
+    capabilities = detect_capabilities()
 
     print("\nJarvis first-run setup")
     print("Press Enter to keep defaults.")
-    print("Free-first mode: local models + local voice need no paid credentials.\n")
+    print("Free-first mode: Jarvis works without paid APIs and does not need a local LLM.\n")
+    print(format_capability_report(capabilities))
+    print("\nRecommended for weak PCs: AI off, faster-whisper tiny, basic text-first flow.\n")
 
     token_default = values.get("ASSISTANT_TOKEN", "")
     if not token_default or token_default == "change-me":
@@ -90,11 +95,11 @@ def run_setup() -> None:
         "OPENAI_MODEL": _prompt("Cloud model", model_default),
         "OLLAMA_BASE_URL": values.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
         "OLLAMA_MODEL": values.get("OLLAMA_MODEL", "llama3.1:8b"),
-        "AI_ROUTE_MODE": values.get("AI_ROUTE_MODE", "local" if provider == "none" else "hybrid"),
+        "AI_ROUTE_MODE": values.get("AI_ROUTE_MODE", "off" if provider == "none" else "hybrid"),
         "GREETING_ENABLED": values.get("GREETING_ENABLED", "true"),
-        "STT_MODE": values.get("STT_MODE", "hybrid"),
+        "STT_MODE": values.get("STT_MODE", "local"),
         "STT_LANGUAGE": values.get("STT_LANGUAGE", "en"),
-        "FASTER_WHISPER_MODEL": values.get("FASTER_WHISPER_MODEL", "small"),
+        "FASTER_WHISPER_MODEL": values.get("FASTER_WHISPER_MODEL", "tiny"),
         "OPENAI_STT_MODEL": values.get("OPENAI_STT_MODEL", "whisper-1"),
         "TTS_MODE": values.get("TTS_MODE", "hybrid"),
         "PIPER_BIN": values.get("PIPER_BIN", "piper"),
@@ -111,7 +116,7 @@ def run_setup() -> None:
     ENV_FILE.write_text(content, encoding="utf-8")
 
     print("\nSaved .env successfully.")
-    print("If cloud key is empty, Jarvis stays free with local-only mode and uses Ollama/Piper/faster-whisper when available.")
+    print("If cloud key is empty, Jarvis stays in free local-first mode and still works for tools, web search, and text replies.")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ class AssistantMessageResponse(BaseModel):
     model_used: str | None = None
     action_required: bool = False
     pending_action_id: str | None = None
+    pending_action_expires_in: int | None = None
 
 
 class ConfirmActionRequest(BaseModel):

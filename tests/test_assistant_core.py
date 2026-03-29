@@ -36,3 +36,19 @@ def test_first_interaction_has_greeting(monkeypatch) -> None:
 
     assert "Hello" in first.reply
     assert second.reply.count("Hello") == 0
+
+
+def test_no_llm_mode_returns_local_fallback() -> None:
+    core = AssistantCore()
+    core.llm.is_enabled = lambda: False  # type: ignore[method-assign]
+
+    resp = core.handle_message("write me a poem")
+
+    assert "free local mode" in resp.reply
+    assert "show cpu and memory" in resp.reply
+
+
+def test_default_settings_are_free_first() -> None:
+    env_example = open("/home/kali/Projects/Robot /.env.example", encoding="utf-8").read()
+    assert "AI_ROUTE_MODE=off" in env_example
+    assert "FASTER_WHISPER_MODEL=tiny" in env_example

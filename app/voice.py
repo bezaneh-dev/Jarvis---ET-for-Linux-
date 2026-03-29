@@ -13,6 +13,9 @@ from app.config import settings
 
 
 class VoiceService:
+    _faster_whisper_model = None
+    _faster_whisper_model_name: str | None = None
+
     def record_wav(self, seconds: int = 4) -> tuple[bool, str, str | None]:
         if seconds < 1 or seconds > 20:
             return False, "Recording seconds must be between 1 and 20.", None
@@ -68,7 +71,7 @@ class VoiceService:
                 return True, self._normalize_transcript(text), ""
             return False, "", err
 
-        return False, "", "No STT backend available. Install faster-whisper/whisper CLI or set OPENAI_API_KEY."
+        return False, "", "No STT backend available. Install faster-whisper or whisper CLI for fully free voice input."
 
     def speak_text(self, text: str) -> tuple[bool, str]:
         text = text.strip()
@@ -98,7 +101,7 @@ class VoiceService:
             except Exception:
                 continue
 
-        return False, "No TTS engine found. Install Piper, speech-dispatcher, or espeak-ng."
+        return False, "No TTS engine found. Text reply is still available."
 
     def _transcribe_faster_whisper(self, wav_path: str) -> tuple[bool, str, str]:
         try:
@@ -107,7 +110,17 @@ class VoiceService:
             return False, "", "faster-whisper is not installed."
 
         try:
-            model = WhisperModel(settings.faster_whisper_model, device="auto", compute_type="int8")
+            if (
+                self.__class__._faster_whisper_model is None
+                or self.__class__._faster_whisper_model_name != settings.faster_whisper_model
+            ):
+                self.__class__._faster_whisper_model = WhisperModel(
+                    settings.faster_whisper_model,
+                    device="auto",
+                    compute_type="int8",
+                )
+                self.__class__._faster_whisper_model_name = settings.faster_whisper_model
+            model = self.__class__._faster_whisper_model
             segments, _ = model.transcribe(wav_path, language=settings.stt_language, vad_filter=True)
             text = " ".join(segment.text.strip() for segment in segments if segment.text).strip()
             if not text:

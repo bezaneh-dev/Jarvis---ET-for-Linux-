@@ -26,14 +26,14 @@ class Settings:
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-    ai_route_mode: str = os.getenv("AI_ROUTE_MODE", "hybrid").lower()
+    ai_route_mode: str = os.getenv("AI_ROUTE_MODE", "off").lower()
     greeting_enabled: bool = os.getenv("GREETING_ENABLED", "true").lower() == "true"
     assistant_name: str = os.getenv("ASSISTANT_NAME", "Jarvis")
     user_name: str = os.getenv("USER_NAME", "Boss")
 
     stt_mode: str = os.getenv("STT_MODE", "hybrid").lower()
     stt_language: str = os.getenv("STT_LANGUAGE", "en")
-    faster_whisper_model: str = os.getenv("FASTER_WHISPER_MODEL", "small")
+    faster_whisper_model: str = os.getenv("FASTER_WHISPER_MODEL", "tiny")
     openai_stt_model: str = os.getenv("OPENAI_STT_MODEL", "whisper-1")
 
     tts_mode: str = os.getenv("TTS_MODE", "hybrid").lower()

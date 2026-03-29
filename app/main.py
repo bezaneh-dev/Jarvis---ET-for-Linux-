@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.assistant_core import AssistantCore
+from app.capabilities import detect_capabilities
 from app.config import settings
 from app.models import (
     AssistantMessageRequest,
@@ -44,6 +45,12 @@ def verify_token(x_token: Optional[str] = Query(None, alias="x_token")) -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "jarvis-lite"}
+
+
+@app.get("/capabilities", dependencies=[Depends(verify_token)])
+async def capabilities() -> dict:
+    snapshot = detect_capabilities()
+    return {"ok": True, "summary": "Capability detection complete.", "data": snapshot.as_dict()}
 
 
 @app.get("/metrics", dependencies=[Depends(verify_token)])
@@ -109,6 +116,7 @@ async def voice_chat(body: VoiceChatRequest) -> dict:
             "reply": response.reply,
             "action_required": response.action_required,
             "pending_action_id": response.pending_action_id,
+            "pending_action_expires_in": response.pending_action_expires_in,
             "tts": speak_summary,
         }
     finally:

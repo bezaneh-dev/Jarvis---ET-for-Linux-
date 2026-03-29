@@ -1,10 +1,11 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 
 client = TestClient(app)
-TOKEN = "change-me"
+TOKEN = settings.assistant_token
 
 
 def test_health_ok() -> None:
@@ -12,6 +13,14 @@ def test_health_ok() -> None:
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["status"] == "ok"
+
+
+def test_capabilities_endpoint_ok() -> None:
+    resp = client.get(f"/capabilities?x_token={TOKEN}")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert "microphone" in payload["data"]
 
 
 def test_shutdown_requires_confirmation() -> None:
@@ -23,6 +32,7 @@ def test_shutdown_requires_confirmation() -> None:
     payload = resp.json()
     assert payload["action_required"] is True
     assert payload["pending_action_id"]
+    assert payload["pending_action_expires_in"] is not None
 
 
 def test_cancel_pending_action() -> None:

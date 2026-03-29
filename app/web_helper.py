@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import httpx
 from bs4 import BeautifulSoup
 from ddgs import DDGS
@@ -45,13 +43,17 @@ class WebHelper:
         if page_extract:
             synthesis_input += "\n\nPrimary page extract:\n" + page_extract[:2000]
 
-        llm_prompt = (
-            "Summarize this research in 5 bullet points with practical takeaway. "
-            "Do not invent facts. Keep it concise.\n\n"
-            f"Query: {query}\n\n"
-            f"Material:\n{synthesis_input}"
-        )
-        summary, model = self.llm.ask(llm_prompt)
+        if self.llm.is_enabled():
+            llm_prompt = (
+                "Summarize this research in 5 bullet points with practical takeaway. "
+                "Do not invent facts. Keep it concise.\n\n"
+                f"Query: {query}\n\n"
+                f"Material:\n{synthesis_input}"
+            )
+            summary, model = self.llm.ask(llm_prompt)
+        else:
+            summary = self._summarize_without_llm(query, snippets, page_extract)
+            model = None
 
         return ToolResult(
             ok=True,
@@ -63,6 +65,17 @@ class WebHelper:
                 "sources": sources,
             },
         )
+
+    def _summarize_without_llm(self, query: str, snippets: list[str], page_extract: str) -> str:
+        bullets = [f"- Search query: {query}"]
+        for snippet in snippets[:3]:
+            bullets.append(snippet)
+        if page_extract:
+            bullets.append(f"- Page extract: {page_extract[:240].strip()}")
+        if len(bullets) == 1:
+            bullets.append("- Results found, but the pages did not expose useful summary text.")
+        bullets.append("- Practical takeaway: open the source links for exact details before acting on them.")
+        return "\n".join(bullets)
 
     def _extract_page_text(self, url: str) -> str:
         try:

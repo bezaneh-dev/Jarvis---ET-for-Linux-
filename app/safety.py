@@ -34,6 +34,13 @@ class ConfirmationManager:
         )
         return action_id
 
+    def expires_in(self, action_id: str) -> int | None:
+        action = self._pending.get(action_id)
+        if action is None:
+            return None
+        remaining = int(action.expires_at - time.time())
+        return max(0, remaining)
+
     def confirm(self, action_id: str, approve: bool) -> ToolResult:
         action = self._pending.pop(action_id, None)
         if action is None:

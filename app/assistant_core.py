@@ -53,10 +53,17 @@ class AssistantCore:
                     reply=greeting_prefix + f"Confirmation required: {decision.summary}",
                     action_required=True,
                     pending_action_id=action_id,
+                    pending_action_expires_in=self.confirmations.expires_in(action_id),
                 )
 
             result = decision.executor()
             return AssistantMessageResponse(reply=greeting_prefix + self._format_tool_result(result), action_required=False)
+
+        if lower in {"help", "commands", "/help"}:
+            return AssistantMessageResponse(reply=greeting_prefix + self._help_text())
+
+        if not self.llm.is_enabled():
+            return AssistantMessageResponse(reply=greeting_prefix + self._local_fallback(text))
 
         prompt = (
             "You are Jarvis-lite for Linux. Keep answers short, practical, and command-focused. "
@@ -86,6 +93,10 @@ class AssistantCore:
                 summary=f"Research query: {query}",
                 executor=lambda q=query: self.web.research(q),
             )
+
+        if lower.startswith(("show ", "check ", "status ")) and any(kw in lower for kw in ["cpu", "memory", "disk", "metrics", "health"]):
+            risk, executor = tool_metrics()
+            return ToolDecision(risk=risk, summary="Read system metrics", executor=executor)
 
         if any(kw in lower for kw in ["metrics", "cpu", "memory", "disk usage", "health"]):
             risk, executor = tool_metrics()
@@ -125,12 +136,12 @@ class AssistantCore:
             return base
         preview = []
         if "stdout" in result.data and result.data["stdout"]:
-            preview.append(f"stdout: {result.data['stdout'][:400]}")
+            preview.append(f"Output:\n{result.data['stdout'][:400]}")
         if "stderr" in result.data and result.data["stderr"]:
-            preview.append(f"stderr: {result.data['stderr'][:400]}")
+            preview.append(f"Warnings:\n{result.data['stderr'][:240]}")
         if "cpu_percent" in result.data:
             preview.append(
-                "cpu={cpu:.1f}% mem={mem:.1f}% disk={disk:.1f}%".format(
+                "System metrics:\nCPU {cpu:.1f}% | Memory {mem:.1f}% | Disk {disk:.1f}%".format(
                     cpu=result.data.get("cpu_percent", 0.0),
                     mem=result.data.get("memory_percent", 0.0),
                     disk=result.data.get("disk_percent", 0.0),
@@ -138,15 +149,50 @@ class AssistantCore:
             )
         if "processes" in result.data:
             top = result.data["processes"][:5]
-            names = ", ".join(f"{p.get('name')}({p.get('pid')})" for p in top)
-            preview.append(f"top: {names}")
+            lines = []
+            for proc in top:
+                lines.append(
+                    "{name} pid={pid} cpu={cpu:.1f}% mem={mem:.1f}%".format(
+                        name=proc.get("name", "unknown"),
+                        pid=proc.get("pid", "?"),
+                        cpu=float(proc.get("cpu_percent", 0.0) or 0.0),
+                        mem=float(proc.get("memory_percent", 0.0) or 0.0),
+                    )
+                )
+            preview.append("Top processes:\n" + "\n".join(lines))
         if "summary" in result.data and isinstance(result.data["summary"], str):
-            preview.append(f"research: {result.data['summary'][:600]}")
+            preview.append(f"Research summary:\n{result.data['summary'][:800]}")
         if "sources" in result.data and isinstance(result.data["sources"], list):
             refs = []
             for src in result.data["sources"][:3]:
                 if isinstance(src, dict) and src.get("url"):
                     refs.append(str(src["url"]))
             if refs:
-                preview.append("sources: " + " | ".join(refs))
+                preview.append("Sources:\n" + "\n".join(refs))
         return base + ("\n" + "\n".join(preview) if preview else "")
+
+    @staticmethod
+    def _help_text() -> str:
+        return (
+            "Local commands I handle well:\n"
+            "- show cpu and memory\n"
+            "- list top processes\n"
+            "- run df -h\n"
+            "- open firefox\n"
+            "- search web linux swap tuning\n"
+            "- shutdown / restart / sleep / lock (confirmation required)"
+        )
+
+    def _local_fallback(self, text: str) -> str:
+        if not text:
+            return self._help_text()
+        return (
+            "I am running in free local mode without an LLM, so I focus on reliable Linux tasks.\n"
+            f"You said: {text}\n"
+            "Try one of these next:\n"
+            "- show cpu and memory\n"
+            "- list top processes\n"
+            "- run uptime\n"
+            "- search web linux performance tuning\n"
+            "- type help to see more commands"
+        )

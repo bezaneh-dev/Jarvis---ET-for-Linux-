@@ -15,8 +15,8 @@ pip install -q -r requirements.txt
 if [[ ! -f .env ]]; then
   python3 -m app.setup_wizard
 else
-  if grep -q '^ASSISTANT_TOKEN=change-me$' .env || grep -q '^OPENAI_API_KEY=$' .env; then
-    echo "Credentials look incomplete."
+  if grep -q '^ASSISTANT_TOKEN=change-me$' .env; then
+    echo "Assistant token still uses the default value."
     read -r -p "Run setup wizard now? [Y/n]: " REPLY
     if [[ -z "${REPLY}" || "${REPLY,,}" == "y" || "${REPLY,,}" == "yes" ]]; then
       python3 -m app.setup_wizard
