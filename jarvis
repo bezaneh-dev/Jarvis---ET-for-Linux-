@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ ! -d .venv ]]; then
+  python3 -m venv .venv
+fi
+
+source .venv/bin/activate
+
+pip install -q -r requirements.txt
+
+if [[ ! -f .env ]]; then
+  python3 -m app.setup_wizard
+else
+  if grep -q '^ASSISTANT_TOKEN=change-me$' .env || grep -q '^OPENAI_API_KEY=$' .env; then
+    echo "Credentials look incomplete."
+    read -r -p "Run setup wizard now? [Y/n]: " REPLY
+    if [[ -z "${REPLY}" || "${REPLY,,}" == "y" || "${REPLY,,}" == "yes" ]]; then
+      python3 -m app.setup_wizard
+    fi
+  fi
+fi
+
+python3 -m app.jarvis_mode
