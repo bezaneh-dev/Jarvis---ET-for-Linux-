@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import httpx
 
 from app.config import settings
+from app.web_helper import DDGS
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,7 @@ def detect_capabilities() -> CapabilitySnapshot:
         offline_stt=_detect_offline_stt(),
         tts=_detect_tts(),
         llm=_detect_llm(),
-        web_search=CapabilityStatus(available=True, detail="DuckDuckGo text search is available without API keys."),
+        web_search=_detect_web_search(),
     )
 
 
@@ -68,12 +70,9 @@ def _detect_microphone() -> CapabilityStatus:
 def _detect_offline_stt() -> CapabilityStatus:
     if shutil.which("whisper"):
         return CapabilityStatus(True, "Offline transcription works via whisper CLI.")
-    try:
-        import faster_whisper  # noqa: F401
-
+    if importlib.util.find_spec("faster_whisper") is not None:
         return CapabilityStatus(True, f"Offline transcription ready with faster-whisper ({settings.faster_whisper_model}).")
-    except Exception:
-        return CapabilityStatus(False, "Install faster-whisper or whisper CLI for offline voice input.")
+    return CapabilityStatus(False, "Install faster-whisper or whisper CLI for offline voice input.")
 
 
 def _detect_tts() -> CapabilityStatus:
@@ -98,6 +97,12 @@ def _detect_llm() -> CapabilityStatus:
         return CapabilityStatus(True, f"Cloud LLM is configured with model {settings.openai_model}.")
 
     return CapabilityStatus(False, "No LLM configured; Jarvis will use built-in local guidance.")
+
+
+def _detect_web_search() -> CapabilityStatus:
+    if DDGS is None:
+        return CapabilityStatus(False, "Install the optional 'ddgs' package to enable web search.")
+    return CapabilityStatus(True, "DuckDuckGo text search is available without API keys.")
 
 
 def _ollama_reachable() -> bool:

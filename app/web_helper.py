@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import httpx
 from bs4 import BeautifulSoup
-from ddgs import DDGS
+
+try:
+    from ddgs import DDGS
+except ImportError:  # pragma: no cover - exercised in test environments without optional dependency
+    DDGS = None
 
 from app.llm import LLMRouter
 from app.models import ToolResult
@@ -16,6 +20,12 @@ class WebHelper:
         query = query.strip()
         if not query:
             return ToolResult(ok=False, summary="No research query provided.")
+
+        if DDGS is None:
+            return ToolResult(
+                ok=False,
+                summary="Web search is unavailable because the optional 'ddgs' package is not installed.",
+            )
 
         try:
             with DDGS() as ddgs:

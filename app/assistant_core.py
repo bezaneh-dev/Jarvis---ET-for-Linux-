@@ -62,6 +62,10 @@ class AssistantCore:
         if lower in {"help", "commands", "/help"}:
             return AssistantMessageResponse(reply=greeting_prefix + self._help_text())
 
+        web_result = self.web.research(text, max_results=3)
+        if web_result.ok:
+            return AssistantMessageResponse(reply=greeting_prefix + self._format_tool_result(web_result), action_required=False)
+
         if not self.llm.is_enabled():
             return AssistantMessageResponse(reply=greeting_prefix + self._local_fallback(text))
 

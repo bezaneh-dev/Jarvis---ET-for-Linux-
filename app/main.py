@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.assistant_core import AssistantCore
@@ -47,30 +47,44 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "jarvis-lite"}
 
 
-@app.get("/capabilities", dependencies=[Depends(verify_token)])
-async def capabilities() -> dict:
+@app.get("/capabilities")
+async def capabilities(x_token: Optional[str] = Query(None, alias="x_token")) -> dict:
+    verify_token(x_token)
     snapshot = detect_capabilities()
     return {"ok": True, "summary": "Capability detection complete.", "data": snapshot.as_dict()}
 
 
-@app.get("/metrics", dependencies=[Depends(verify_token)])
-async def metrics() -> dict:
+@app.get("/metrics")
+async def metrics(x_token: Optional[str] = Query(None, alias="x_token")) -> dict:
+    verify_token(x_token)
     return get_basic_metrics()
 
 
-@app.post("/assistant/message", dependencies=[Depends(verify_token)], response_model=AssistantMessageResponse)
-async def assistant_message(body: AssistantMessageRequest) -> AssistantMessageResponse:
+@app.post("/assistant/message", response_model=AssistantMessageResponse)
+async def assistant_message(
+    body: AssistantMessageRequest,
+    x_token: Optional[str] = Query(None, alias="x_token"),
+) -> AssistantMessageResponse:
+    verify_token(x_token)
     return core.handle_message(body.message)
 
 
-@app.post("/assistant/confirm", dependencies=[Depends(verify_token)])
-async def assistant_confirm(body: ConfirmActionRequest) -> dict:
+@app.post("/assistant/confirm")
+async def assistant_confirm(
+    body: ConfirmActionRequest,
+    x_token: Optional[str] = Query(None, alias="x_token"),
+) -> dict:
+    verify_token(x_token)
     result = core.confirm_action(action_id=body.action_id, approve=body.approve)
     return {"ok": result.ok, "summary": result.summary, "data": result.data}
 
 
-@app.post("/voice/record-transcribe", dependencies=[Depends(verify_token)])
-async def voice_record_transcribe(body: VoiceRecordRequest) -> dict:
+@app.post("/voice/record-transcribe")
+async def voice_record_transcribe(
+    body: VoiceRecordRequest,
+    x_token: Optional[str] = Query(None, alias="x_token"),
+) -> dict:
+    verify_token(x_token)
     ok, summary, wav_path = voice.record_wav(seconds=body.seconds)
     if not ok or wav_path is None:
         return {"ok": False, "summary": summary, "text": ""}
@@ -84,14 +98,22 @@ async def voice_record_transcribe(body: VoiceRecordRequest) -> dict:
         Path(wav_path).unlink(missing_ok=True)
 
 
-@app.post("/voice/speak", dependencies=[Depends(verify_token)])
-async def voice_speak(body: VoiceSpeakRequest) -> dict:
+@app.post("/voice/speak")
+async def voice_speak(
+    body: VoiceSpeakRequest,
+    x_token: Optional[str] = Query(None, alias="x_token"),
+) -> dict:
+    verify_token(x_token)
     ok, summary = voice.speak_text(body.text)
     return {"ok": ok, "summary": summary}
 
 
-@app.post("/voice/chat", dependencies=[Depends(verify_token)])
-async def voice_chat(body: VoiceChatRequest) -> dict:
+@app.post("/voice/chat")
+async def voice_chat(
+    body: VoiceChatRequest,
+    x_token: Optional[str] = Query(None, alias="x_token"),
+) -> dict:
+    verify_token(x_token)
     ok, summary, wav_path = voice.record_wav(seconds=body.seconds)
     if not ok or wav_path is None:
         return {"ok": False, "summary": summary}
@@ -123,8 +145,9 @@ async def voice_chat(body: VoiceChatRequest) -> dict:
         Path(wav_path).unlink(missing_ok=True)
 
 
-@app.get("/web/research", dependencies=[Depends(verify_token)])
-async def web_research(query: str) -> dict:
+@app.get("/web/research")
+async def web_research(query: str, x_token: Optional[str] = Query(None, alias="x_token")) -> dict:
+    verify_token(x_token)
     result = web.research(query)
     return {"ok": result.ok, "summary": result.summary, "data": result.data}
 

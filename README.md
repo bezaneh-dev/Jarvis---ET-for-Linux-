@@ -1,230 +1,203 @@
-# Jarvis Lite Linux (MVP)
+# Jarvis Lite Linux
 
-A local-first PC assistant backend for Linux with:
-- system metrics and websocket alerts
-- tool-based command execution with allowlist
-- process listing and kill (confirmation required)
-- system actions (shutdown/restart/sleep/lock) with mandatory confirmation
-- no-LLM-required terminal mode with optional AI providers
-- web research helper with source links and offline-friendly summarizing
-- optional voice record/transcribe and text-to-speech endpoints
-- startup capability report for weak PCs and free-first setups
+> A free-first Linux assistant built for weak PCs.
+> No paid API required. No local LLM required. Still useful.
 
-## Quick start
+## Why This Project Exists
 
-1. Run one command.
+Jarvis Lite is for people who want a personal Linux assistant without:
+
+- paying for APIs
+- running a heavy local LLM
+- needing a powerful machine
+
+It is designed to be **tool-first**, **safe by default**, and **actually usable offline** for common desktop tasks.
+
+## What It Can Do
+
+- Show CPU, memory, disk, and system health
+- List running processes
+- Kill a process with confirmation
+- Run safe allowlisted shell commands
+- Open desktop apps
+- Do web research with source links
+- Handle optional voice input and text-to-speech
+- Expose an HTTP API for integrations
+
+## Free-First Design
+
+Jarvis Lite works well with this setup:
+
+- `AI_ROUTE_MODE=off`
+- no cloud key
+- no Ollama
+- optional `faster-whisper` for speech-to-text
+- optional Piper or `espeak-ng` for voice output
+
+That means the assistant still works for:
+
+- local system tasks
+- command execution through the allowlist
+- process management
+- web search with sources
+- text-based interaction
+
+## Quick Start
+
+Run:
 
 ```bash
 cd '/home/kali/Projects/Robot '
 ./jarvis
 ```
 
-What this does automatically:
-- creates `.venv` if missing
-- installs dependencies
-- asks for credentials/settings on first run (free-first defaults)
-- starts the unified terminal mode
+What happens automatically:
 
-If `.env` exists but creds are incomplete, launcher asks if you want to run setup wizard.
+- a `.venv` is created if missing
+- dependencies are installed
+- the setup wizard runs on first launch
+- Jarvis starts in the unified terminal mode
 
-## Free credentials (recommended)
+## Terminal Experience
 
-Use this stack to keep the project free:
-- LLM: optional only; Jarvis works without one
-- STT: faster-whisper local (no key)
-- TTS: Piper local voice model (no key) https://huggingface.co/rhasspy/piper-voices
+The terminal mode is the main UI.
 
-Optional free cloud fallback (rate-limited):
-- Groq API key page: https://console.groq.com/keys
-- Groq quickstart: https://console.groq.com/docs/quickstart
+You can:
 
-Free note:
-- Local components above are free to run.
-- Cloud free tiers can change over time, so verify current limits in provider docs.
+- press `Enter` or type `/voice` to record from the microphone
+- type a normal message for text commands
+- type `/speak hello` to test text-to-speech
+- type `help` to see built-in examples
+- type `exit` to quit
 
-Manual setup wizard:
+Example commands:
+
+```text
+show cpu and memory
+list top processes
+run df -h
+run uptime
+open firefox
+search web linux swap tuning
+shutdown
+```
+
+## Setup Notes
+
+The setup wizard writes `.env` for you:
 
 ```bash
 source .venv/bin/activate
 python3 -m app.setup_wizard
 ```
 
-## Make voice sound more human
+Recommended weak-PC defaults:
 
-Best quality currently comes from Piper TTS.
+```env
+AI_ROUTE_MODE=off
+STT_MODE=local
+FASTER_WHISPER_MODEL=tiny
+TTS_MODE=hybrid
+```
 
-1. Install audio tools:
+If you choose provider `none`, Jarvis stays fully free-first.
+
+## Optional Voice Stack
+
+Install basic voice packages:
 
 ```bash
 sudo apt update
 sudo apt install -y alsa-utils pulseaudio-utils speech-dispatcher espeak-ng
 ```
 
-2. Install Piper (example if available in your distro), then download a voice model.
-3. Set these in `.env`:
+Optional upgrades:
 
-```bash
+- `faster-whisper` for offline speech-to-text
+- Piper for better voice output
+
+Piper setup example:
+
+```env
 TTS_MODE=local
 PIPER_BIN=piper
 PIPER_MODEL_PATH=/absolute/path/to/voice-model.onnx
 PIPER_SPEAKER_ID=0
 ```
 
-If Piper is not configured, the system falls back to `spd-say`/`espeak-ng`.
+Helpful links:
 
-## Improve understanding (speech-to-text)
+- Ollama: https://ollama.com/
+- Piper voices: https://huggingface.co/rhasspy/piper-voices
+- Groq keys: https://console.groq.com/keys
 
-# Jarvis Lite (Linux)
+## API Mode
 
-Jarvis Lite is a **local-first** Jarvis-style assistant for Linux. It focuses on **reliable PC actions** (metrics, safe commands, app launch, process control) and optionally adds **voice input/output**, **web research**, and an **LLM brain** (local Ollama first, optional cloud fallback).
-
-This repo includes:
-- Voice-first terminal mode (recommended)
-- HTTP API (FastAPI) with token guard
-- Safety confirmation gate for high-risk actions
-
-## Quick start (one command)
-
-```bash
-./jarvis
-```
-
-What it does:
-- Creates `.venv` if missing
-- Installs dependencies
-- Runs first-time setup wizard (writes `.env`)
-- Starts voice-first Jarvis mode
-
-If you want **100% free/local**, choose provider `none` in the wizard.
-
-## Features
-
-- System metrics: CPU/RAM/Disk + `/ws/metrics` alerts
-- Process tools: list processes; kill by PID (**confirmation required**)
-- System actions: shutdown/restart/sleep/lock (**confirmation required**)
-- Safe shell runner: `run <command>` restricted by `ALLOWED_COMMANDS`
-- Web research: DuckDuckGo search + short summary + sources (no API key required)
-- Voice:
-  - Record from mic via `arecord` (optional)
-  - STT: local-first (faster-whisper / whisper CLI) with optional cloud fallback
-  - TTS: Piper (best quality) or fallback to `speech-dispatcher` / `espeak-ng`
-- Greeting on first interaction (`GREETING_ENABLED=true`)
-
-## Requirements
-
-- Linux
-- Python 3.10+ recommended
-- `python3-venv` available
-
-Optional (voice):
-
-```bash
-sudo apt update
-sudo apt install -y alsa-utils speech-dispatcher espeak-ng
-```
-
-## Setup wizard
-
-The wizard runs automatically on first launch, and writes `.env`. You can re-run it anytime:
-
-```bash
-source .venv/bin/activate
-python3 -m app.setup_wizard
-```
-
-Useful links:
-- Groq API keys (optional free tier): https://console.groq.com/keys
-- Piper voices (free): https://huggingface.co/rhasspy/piper-voices
-- Ollama (optional local LLM): https://ollama.com/
-
-## Usage
-
-### 1) Voice-first mode (recommended)
-
-Start:
-
-```bash
-./jarvis
-```
-
-Controls:
-- Press **Enter**: records voice and replies (if mic is available)
-- Type text: sends as a message
-- Type `exit`: quit
-
-Example commands:
-- `show cpu and memory`
-- `list top processes`
-- `run df -h`
-- `open firefox`
-- `search web linux swap tuning`
-- `shutdown` (will ask for confirmation)
-
-### 2) API mode (FastAPI)
-
-Run server:
+Start the API:
 
 ```bash
 source .venv/bin/activate
 uvicorn app.main:app --host 127.0.0.1 --port 8010
 ```
 
-Token: set `ASSISTANT_TOKEN` in `.env`, then call endpoints with `?x_token=TOKEN`.
+Set `ASSISTANT_TOKEN` in `.env`, then call endpoints with `?x_token=TOKEN`.
 
-Examples:
+Useful endpoints:
+
+- `GET /health`
+- `GET /capabilities`
+- `GET /metrics`
+- `POST /assistant/message`
+- `POST /assistant/confirm`
+- `GET /web/research`
+- `POST /voice/record-transcribe`
+- `POST /voice/chat`
+- `POST /voice/speak`
+
+Example:
 
 ```bash
-curl "http://127.0.0.1:8010/health"
-
 curl "http://127.0.0.1:8010/capabilities?x_token=TOKEN"
-curl "http://127.0.0.1:8010/metrics?x_token=TOKEN"
 
 curl -X POST "http://127.0.0.1:8010/assistant/message?x_token=TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"message":"show cpu and memory"}'
-
-curl "http://127.0.0.1:8010/web/research?x_token=TOKEN&query=linux+cpu+optimization"
-
-curl -X POST "http://127.0.0.1:8010/voice/chat?x_token=TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"seconds":5,"speak_reply":true}'
 ```
 
-If a request requires confirmation you’ll get `pending_action_id`, then confirm it:
+## Security
 
-```bash
-curl -X POST "http://127.0.0.1:8010/assistant/confirm?x_token=TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"action_id":"YOUR_ID","approve":true}'
-```
-
-## Security model (important)
+Important before you use or share this:
 
 - Do not expose this service to the public internet.
-- Dangerous actions (shutdown/restart/sleep/lock, kill PID) require explicit confirmation.
-- Shell execution is restricted to an allowlist (`ALLOWED_COMMANDS`).
+- Keep it on trusted local networks only.
+- High-risk actions require confirmation, but this is still a machine-control tool.
+- Shell execution is limited by `ALLOWED_COMMANDS`, so review that list before adding new commands.
+- `.env` contains local secrets and should never be committed.
 
-## Making the voice more human (Piper)
+## Push-Safe Repo Notes
 
-1) Install Piper (method varies by distro) and download a `.onnx` voice model from:
-https://huggingface.co/rhasspy/piper-voices
+Current repo hygiene is set up for GitHub:
 
-2) Set in `.env`:
+- `.env` is ignored
+- `.venv/` is ignored
+- `__pycache__/` and build/cache files are ignored
+- generated audio/model files are ignored
+- the tracked repo contains placeholders, not real API keys
+
+Before pushing, keep using:
 
 ```bash
-TTS_MODE=local
-PIPER_BIN=piper
-PIPER_MODEL_PATH=/absolute/path/to/voice-model.onnx
-PIPER_SPEAKER_ID=0
+git status
 ```
 
-If Piper is not configured, Jarvis falls back to `speech-dispatcher` / `espeak-ng`.
+and make sure `.env` does not appear in the staged files.
 
 ## Troubleshooting
 
-- Mic recording fails: install `alsa-utils` (needs `arecord`).
-- No spoken output: install `speech-dispatcher` and `espeak-ng`, or configure Piper.
-- Weak PC: keep `AI_ROUTE_MODE=off` and use web research + tool commands.
+- No microphone recording: install `alsa-utils` for `arecord`
+- No spoken output: install `speech-dispatcher` and `espeak-ng`, or configure Piper
+- Weak PC: keep `AI_ROUTE_MODE=off`
+- No LLM installed: that is okay, Jarvis will fall back to local guidance
 
 ## Development
 
@@ -234,3 +207,5 @@ Run tests:
 source .venv/bin/activate
 pytest -q
 ```
+
+Current test status in this repo: `10 passed`
