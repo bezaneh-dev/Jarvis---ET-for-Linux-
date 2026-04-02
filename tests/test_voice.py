@@ -37,3 +37,26 @@ def test_faster_whisper_model_is_cached(monkeypatch, tmp_path) -> None:
     assert first[0] is True
     assert second[0] is True
     assert created["count"] == 1
+
+
+def test_transcribe_prefers_primary_error_over_missing_cli(monkeypatch, tmp_path) -> None:
+    audio = tmp_path / "sample.wav"
+    audio.write_bytes(b"fake")
+
+    voice = VoiceService()
+    monkeypatch.setattr(voice, "_transcribe_faster_whisper", lambda _path: (False, "", "I did not hear clear speech. Please try again."))
+    monkeypatch.setattr(voice, "_transcribe_whisper_cli", lambda _path: (False, "", "whisper CLI is not installed."))
+
+    ok, text, err = voice.transcribe_file(str(audio))
+
+    assert ok is False
+    assert text == ""
+    assert err == "I did not hear clear speech. Please try again."
+
+
+def test_transcript_normalization_fixes_common_spoken_commands() -> None:
+    voice = VoiceService()
+
+    text = voice._normalize_transcript("jarvis open fire fox")
+
+    assert text == "Open firefox"

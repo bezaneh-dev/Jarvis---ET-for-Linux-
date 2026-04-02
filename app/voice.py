@@ -20,30 +20,16 @@ class VoiceService:
         if seconds < 1 or seconds > 20:
             return False, "Recording seconds must be between 1 and 20.", None
 
-        arecord_path = shutil.which("arecord")
-        if arecord_path is None:
-            return False, "arecord is not installed. Install alsa-utils.", None
-
         fd, out_path = tempfile.mkstemp(prefix="jarvis_", suffix=".wav")
         os.close(fd)
 
-        cmd = [
-            arecord_path,
-            "-f",
-            "cd",
-            "-t",
-            "wav",
-            "-d",
-            str(seconds),
-            out_path,
-        ]
-
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=seconds + 3)
-            if proc.returncode != 0:
-                Path(out_path).unlink(missing_ok=True)
-                return False, proc.stderr.strip() or "Audio recording failed.", None
-            return True, "Audio recorded.", out_path
+            for cmd in self._recording_commands(seconds, out_path):
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=seconds + 5)
+                if proc.returncode == 0:
+                    return True, "Audio recorded.", out_path
+            Path(out_path).unlink(missing_ok=True)
+            return False, "Audio recording failed. Check your microphone input source.", None
         except Exception as exc:
             Path(out_path).unlink(missing_ok=True)
             return False, f"Recording failed: {exc}", None
@@ -60,7 +46,7 @@ class VoiceService:
             ok, text, err2 = self._transcribe_whisper_cli(wav_path)
             if ok:
                 return True, self._normalize_transcript(text), ""
-            err = err2 or err
+            err = self._merge_stt_errors(err, err2)
 
             if settings.stt_mode == "local":
                 return False, "", err or "Local STT failed."
@@ -121,10 +107,24 @@ class VoiceService:
                 )
                 self.__class__._faster_whisper_model_name = settings.faster_whisper_model
             model = self.__class__._faster_whisper_model
-            segments, _ = model.transcribe(wav_path, language=settings.stt_language, vad_filter=True)
+            segments, _ = model.transcribe(
+                wav_path,
+                language=settings.stt_language,
+                task="transcribe",
+                beam_size=5,
+                best_of=5,
+                temperature=0.0,
+                vad_filter=False,
+                condition_on_previous_text=False,
+                initial_prompt=(
+                    "Short Linux desktop commands such as open chrome, open firefox, "
+                    "open terminal, show cpu and memory, list processes, shutdown, restart, "
+                    "sleep, lock, exit, quit."
+                ),
+            )
             text = " ".join(segment.text.strip() for segment in segments if segment.text).strip()
             if not text:
-                return False, "", "faster-whisper produced empty text."
+                return False, "", "I did not hear clear speech. Please try again."
             return True, text, ""
         except Exception as exc:
             return False, "", f"faster-whisper failed: {exc}"
@@ -154,10 +154,80 @@ class VoiceService:
 
     def _normalize_transcript(self, text: str) -> str:
         text = re.sub(r"\s+", " ", text).strip()
+        replacements = {
+            "jarvis ": "",
+            "jarvs ": "",
+            "open fire fox": "open firefox",
+            "launch fire fox": "launch firefox",
+            "open chrome browser": "open chrome",
+            "show c p u": "show cpu",
+            "c p u": "cpu",
+        }
+        lowered = f"{text.lower()} "
+        for src, dst in replacements.items():
+            lowered = lowered.replace(src, f"{dst} ")
+        text = lowered.strip()
         text = text.replace(" i ", " I ")
         if text and text[0].islower():
             text = text[0].upper() + text[1:]
         return text
+
+    @staticmethod
+    def _recording_commands(seconds: int, out_path: str) -> list[list[str]]:
+        commands: list[list[str]] = []
+        ffmpeg_path = shutil.which("ffmpeg")
+        if ffmpeg_path is not None:
+            commands.append(
+                [
+                    ffmpeg_path,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "pulse",
+                    "-i",
+                    "default",
+                    "-t",
+                    str(seconds),
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "16000",
+                    "-y",
+                    out_path,
+                ]
+            )
+
+        arecord_path = shutil.which("arecord")
+        if arecord_path is not None:
+            commands.append(
+                [
+                    arecord_path,
+                    "-q",
+                    "-f",
+                    "S16_LE",
+                    "-c",
+                    "1",
+                    "-r",
+                    "16000",
+                    "-t",
+                    "wav",
+                    "-d",
+                    str(seconds),
+                    out_path,
+                ]
+            )
+        return commands
+
+    @staticmethod
+    def _merge_stt_errors(primary: str, fallback: str) -> str:
+        primary = primary.strip()
+        fallback = fallback.strip()
+        if primary and fallback and primary != fallback:
+            if "not installed" in fallback.lower() and "not installed" not in primary.lower():
+                return primary
+            return f"{primary} Fallback STT also failed: {fallback}"
+        return primary or fallback
 
     def _speak_with_piper(self, text: str) -> tuple[bool, str]:
         piper_bin = shutil.which(settings.piper_bin)

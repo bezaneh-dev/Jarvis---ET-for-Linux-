@@ -11,6 +11,19 @@ from app.models import RiskLevel, ToolResult
 from app.monitoring import get_basic_metrics
 
 
+APP_ALIASES: dict[str, tuple[str, ...]] = {
+    "browser": ("firefox", "google-chrome", "google-chrome-stable", "chromium", "chromium-browser"),
+    "chrome": ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"),
+    "google chrome": ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"),
+    "chromium": ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"),
+    "firefox": ("firefox",),
+    "file manager": ("nautilus", "dolphin", "thunar", "pcmanfm"),
+    "terminal": ("gnome-terminal", "konsole", "xfce4-terminal", "xterm"),
+    "files": ("nautilus", "dolphin", "thunar", "pcmanfm"),
+    "settings": ("gnome-control-center", "systemsettings", "xfce4-settings-manager"),
+}
+
+
 def _run_command(cmd: list[str], timeout: int | None = None) -> ToolResult:
     try:
         proc = subprocess.run(
@@ -125,12 +138,23 @@ def tool_open_app(app_name: str) -> tuple[RiskLevel, Callable[[], ToolResult]]:
     def _exec() -> ToolResult:
         if not app:
             return ToolResult(ok=False, summary="App name is empty.")
+        candidates = _candidate_apps(app)
         try:
-            subprocess.Popen([app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return ToolResult(ok=True, summary=f"Opened {app}.")
-        except FileNotFoundError:
+            for candidate in candidates:
+                try:
+                    subprocess.Popen([candidate], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return ToolResult(ok=True, summary=f"Opened {candidate}.")
+                except FileNotFoundError:
+                    continue
             return ToolResult(ok=False, summary=f"Application not found: {app}")
         except Exception as exc:
             return ToolResult(ok=False, summary=f"Open app failed: {exc}")
 
     return RiskLevel.medium, _exec
+
+
+def _candidate_apps(app_name: str) -> tuple[str, ...]:
+    normalized = " ".join(app_name.lower().split())
+    if normalized in APP_ALIASES:
+        return APP_ALIASES[normalized]
+    return (app_name.strip(),)

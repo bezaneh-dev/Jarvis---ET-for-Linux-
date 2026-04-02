@@ -17,21 +17,21 @@ class LLMRouter:
             return "AI mode is off.", None
         if mode == "local":
             text = self._ask_ollama(prompt)
-            return text, "ollama"
+            return text, f"ollama:{settings.ollama_model}"
         if mode == "cloud":
             text = self._ask_openai(prompt)
-            return text, "openai"
+            return text, self._cloud_label()
 
         # Hybrid mode: local first, cloud fallback.
         try:
             text = self._ask_ollama(prompt)
-            return text, "ollama"
+            return text, f"ollama:{settings.ollama_model}"
         except Exception:
             if not settings.openai_api_key:
                 return "Local model unavailable and no cloud key configured.", None
             try:
                 text = self._ask_openai(prompt)
-                return text, "openai"
+                return text, self._cloud_label()
             except Exception:
                 return "Both local and cloud models are unavailable right now.", None
 
@@ -71,3 +71,8 @@ class LLMRouter:
             resp.raise_for_status()
             data = resp.json()
             return str(data["choices"][0]["message"]["content"]).strip()
+
+    @staticmethod
+    def _cloud_label() -> str:
+        provider = settings.cloud_provider or "cloud"
+        return f"{provider}:{settings.openai_model}"

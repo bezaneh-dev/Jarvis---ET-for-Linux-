@@ -22,18 +22,22 @@ class Settings:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
+    cloud_provider: str = os.getenv("CLOUD_PROVIDER", "none").lower()
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
     ai_route_mode: str = os.getenv("AI_ROUTE_MODE", "off").lower()
     greeting_enabled: bool = os.getenv("GREETING_ENABLED", "true").lower() == "true"
+    startup_voice_greeting: bool = os.getenv("STARTUP_VOICE_GREETING", "true").lower() == "true"
+    voice_only_mode: bool = os.getenv("VOICE_ONLY_MODE", "true").lower() == "true"
+    voice_input_seconds: int = int(os.getenv("VOICE_INPUT_SECONDS", "5"))
     assistant_name: str = os.getenv("ASSISTANT_NAME", "Jarvis")
     user_name: str = os.getenv("USER_NAME", "Boss")
 
     stt_mode: str = os.getenv("STT_MODE", "hybrid").lower()
     stt_language: str = os.getenv("STT_LANGUAGE", "en")
-    faster_whisper_model: str = os.getenv("FASTER_WHISPER_MODEL", "tiny")
+    faster_whisper_model: str = os.getenv("FASTER_WHISPER_MODEL", "base.en")
     openai_stt_model: str = os.getenv("OPENAI_STT_MODEL", "whisper-1")
 
     tts_mode: str = os.getenv("TTS_MODE", "hybrid").lower()

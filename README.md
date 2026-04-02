@@ -131,6 +131,20 @@ Helpful links:
 - Piper voices: https://huggingface.co/rhasspy/piper-voices
 - Groq keys: https://console.groq.com/keys
 
+Where to change things in this repo:
+
+- Voice recording / STT / TTS: `app/voice.py`
+- Command obedience and routing: `app/assistant_core.py`
+- Safe shell and app launching: `app/tools.py`
+- AI provider settings: `app/config.py` and `.env`
+- First-run setup helper: `app/setup_wizard.py`
+
+Free model/API options that work with this project:
+
+- Fully offline and free: `AI_ROUTE_MODE=off` plus `faster-whisper` and local TTS
+- Free local AI: install Ollama and keep `AI_ROUTE_MODE=local` or `hybrid`
+- Free cloud tier: set `CLOUD_PROVIDER=groq`, get a key from `https://console.groq.com/keys`, and use the OpenAI-compatible base URL already supported by the app
+
 ## API Mode
 
 Start the API:

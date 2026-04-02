@@ -62,6 +62,10 @@ class AssistantCore:
         if lower in {"help", "commands", "/help"}:
             return AssistantMessageResponse(reply=greeting_prefix + self._help_text())
 
+        social_reply = self._social_reply(lower)
+        if social_reply is not None:
+            return AssistantMessageResponse(reply=greeting_prefix + social_reply)
+
         web_result = self.web.research(text, max_results=3)
         if web_result.ok:
             return AssistantMessageResponse(reply=greeting_prefix + self._format_tool_result(web_result), action_required=False)
@@ -80,6 +84,15 @@ class AssistantCore:
         return self.confirmations.confirm(action_id=action_id, approve=approve)
 
     def _route_tool(self, lower: str, original: str) -> ToolDecision | None:
+        normalized = self._normalize_for_routing(lower)
+
+        if any(phrase in normalized for phrase in ["voice setup", "fix voice", "voice api", "voice help", "speech setup", "microphone setup"]):
+            return ToolDecision(
+                risk=RiskLevel.low,
+                summary="Show voice setup help",
+                executor=lambda: ToolResult(ok=True, summary=self._voice_setup_text()),
+            )
+
         research_prefixes = ["research ", "search web ", "web search ", "find on web "]
         for prefix in research_prefixes:
             if lower.startswith(prefix):
@@ -98,36 +111,44 @@ class AssistantCore:
                 executor=lambda q=query: self.web.research(q),
             )
 
-        if lower.startswith(("show ", "check ", "status ")) and any(kw in lower for kw in ["cpu", "memory", "disk", "metrics", "health"]):
+        if lower.startswith(("show ", "check ", "status ")) and any(kw in normalized for kw in ["cpu", "memory", "disk", "metrics", "health", "ram", "storage"]):
             risk, executor = tool_metrics()
             return ToolDecision(risk=risk, summary="Read system metrics", executor=executor)
 
-        if any(kw in lower for kw in ["metrics", "cpu", "memory", "disk usage", "health"]):
+        if any(kw in normalized for kw in ["metrics", "cpu", "memory", "disk usage", "health", "ram usage", "storage usage"]):
             risk, executor = tool_metrics()
             return ToolDecision(risk=risk, summary="Read system metrics", executor=executor)
 
-        if "list process" in lower or "top process" in lower or "running process" in lower:
+        if any(phrase in normalized for phrase in ["list process", "top process", "running process", "show process", "what process", "which process"]):
             risk, executor = tool_list_processes()
             return ToolDecision(risk=risk, summary="List active processes", executor=executor)
 
-        kill_match = re.search(r"kill\s+(?:pid\s*)?(\d+)", lower)
+        kill_match = re.search(r"(?:kill|terminate|stop|close)\s+(?:process\s*)?(?:pid\s*)?(\d+)", normalized)
         if kill_match:
             pid = int(kill_match.group(1))
             risk, executor = tool_kill_process(pid)
             return ToolDecision(risk=risk, summary=f"Kill process {pid}", executor=executor)
 
-        for action in ["shutdown", "restart", "sleep", "lock"]:
-            if action in lower:
+        system_aliases = {
+            "shutdown": ("shutdown", "power off", "turn off the computer"),
+            "restart": ("restart", "reboot"),
+            "sleep": ("sleep", "suspend"),
+            "lock": ("lock", "lock screen"),
+        }
+        for action, aliases in system_aliases.items():
+            if any(alias in normalized for alias in aliases):
                 risk, executor = tool_system_control(action)
                 return ToolDecision(risk=risk, summary=f"System action: {action}", executor=executor)
 
-        if lower.startswith("open "):
-            app_name = original[5:]
+        app_request = self._extract_open_target(original)
+        if app_request is not None:
+            app_name = app_request
             risk, executor = tool_open_app(app_name)
             return ToolDecision(risk=risk, summary=f"Open app: {app_name}", executor=executor)
 
-        if lower.startswith("run "):
-            cmd = original[4:]
+        shell_request = self._extract_shell_command(original)
+        if shell_request is not None:
+            cmd = shell_request
             risk, executor = tool_shell(cmd)
             return ToolDecision(risk=risk, summary=f"Run shell command: {cmd}", executor=executor)
 
@@ -180,12 +201,28 @@ class AssistantCore:
         return (
             "Local commands I handle well:\n"
             "- show cpu and memory\n"
+            "- what is using my memory\n"
             "- list top processes\n"
             "- run df -h\n"
+            "- execute uptime\n"
             "- open firefox\n"
+            "- launch terminal\n"
             "- search web linux swap tuning\n"
+            "- fix voice\n"
             "- shutdown / restart / sleep / lock (confirmation required)"
         )
+
+    @staticmethod
+    def _social_reply(lower: str) -> str | None:
+        normalized = re.sub(r"[^a-z0-9\s]", "", lower).strip()
+        if normalized in {"hi", "hey", "hello", "yo", "sup", "whats up", "good morning", "good afternoon", "good evening"}:
+            return (
+                f"Hello {settings.user_name}. "
+                "How can I help you right now?"
+            )
+        if normalized in {"thanks", "thank you", "thx"}:
+            return "You are welcome."
+        return None
 
     def _local_fallback(self, text: str) -> str:
         if not text:
@@ -199,4 +236,58 @@ class AssistantCore:
             "- run uptime\n"
             "- search web linux performance tuning\n"
             "- type help to see more commands"
+        )
+
+    @staticmethod
+    def _normalize_for_routing(text: str) -> str:
+        normalized = " ".join(text.lower().split())
+        normalized = re.sub(r"\bjarvis\b", "", normalized)
+        normalized = re.sub(r"\bjarvs\b", "", normalized)
+        normalized = re.sub(r"\bplease\b", "", normalized)
+        normalized = re.sub(r"\bcould you\b", "", normalized)
+        normalized = re.sub(r"\bcan you\b", "", normalized)
+        normalized = re.sub(r"\bwould you\b", "", normalized)
+        normalized = re.sub(r"\bfor me\b", "", normalized)
+        normalized = re.sub(r"\bram\b", "memory", normalized)
+        return " ".join(normalized.split())
+
+    @classmethod
+    def _extract_open_target(cls, original: str) -> str | None:
+        text = cls._normalize_for_routing(original)
+        patterns = [
+            r"^(?:open|launch|start)\s+(.+)$",
+            r"^(?:open|launch|start)\s+the\s+(.+)$",
+            r"^(?:please\s+)?(?:open|launch|start)\s+(.+)$",
+        ]
+        for pattern in patterns:
+            match = re.match(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    @classmethod
+    def _extract_shell_command(cls, original: str) -> str | None:
+        text = cls._normalize_for_routing(original)
+        patterns = [
+            r"^(?:run|execute)\s+(.+)$",
+            r"^(?:run|execute)\s+command\s+(.+)$",
+        ]
+        for pattern in patterns:
+            match = re.match(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    @staticmethod
+    def _voice_setup_text() -> str:
+        return (
+            "Voice setup help:\n"
+            "- Microphone recording uses arecord or ffmpeg in app/voice.py\n"
+            "- Offline speech-to-text uses faster-whisper or whisper CLI\n"
+            "- Spoken replies use Piper first, then spd-say / espeak-ng / espeak\n"
+            "- Free voice model files: https://huggingface.co/rhasspy/piper-voices\n"
+            "- Free cloud key option for AI replies: https://console.groq.com/keys\n"
+            "- Setup wizard: python3 -m app.setup_wizard\n"
+            "- Main voice code: app/voice.py\n"
+            "- Main assistant routing: app/assistant_core.py"
         )

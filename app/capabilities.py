@@ -64,6 +64,8 @@ def format_capability_report(capabilities: CapabilitySnapshot) -> str:
 def _detect_microphone() -> CapabilityStatus:
     if shutil.which("arecord"):
         return CapabilityStatus(True, "Microphone recording works via arecord.")
+    if shutil.which("ffmpeg"):
+        return CapabilityStatus(True, "Microphone recording works via ffmpeg and PulseAudio.")
     return CapabilityStatus(False, "Install alsa-utils for microphone recording.")
 
 
@@ -94,7 +96,8 @@ def _detect_llm() -> CapabilityStatus:
         return CapabilityStatus(True, f"Ollama is reachable with model {settings.ollama_model}.")
 
     if mode in {"cloud", "hybrid"} and settings.openai_api_key:
-        return CapabilityStatus(True, f"Cloud LLM is configured with model {settings.openai_model}.")
+        provider = settings.cloud_provider or "cloud"
+        return CapabilityStatus(True, f"{provider.title()} is configured with model {settings.openai_model}.")
 
     return CapabilityStatus(False, "No LLM configured; Jarvis will use built-in local guidance.")
 
