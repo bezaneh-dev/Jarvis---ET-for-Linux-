@@ -15,6 +15,8 @@ from app.tools import (
     tool_open_app,
     tool_shell,
     tool_system_control,
+    tool_type_text,
+    tool_window_control,
 )
 from app.web_helper import WebHelper
 
@@ -32,10 +34,12 @@ class AssistantCore:
         self.llm = LLMRouter()
         self.web = WebHelper(self.llm)
         self._has_greeted = False
+        self._last_user_message: str | None = None
 
     def handle_message(self, user_text: str) -> AssistantMessageResponse:
         text = user_text.strip()
         lower = text.lower()
+        recall_request = self._is_recall_request(lower)
 
         greeting_prefix = ""
         if settings.greeting_enabled and not self._has_greeted:
@@ -44,6 +48,11 @@ class AssistantCore:
                 "I am ready when you are.\n"
             )
             self._has_greeted = True
+
+        if recall_request:
+            return AssistantMessageResponse(reply=greeting_prefix + self._last_heard_text())
+
+        self._last_user_message = text
 
         decision = self._route_tool(lower, text)
         if decision is not None:
@@ -123,6 +132,18 @@ class AssistantCore:
             risk, executor = tool_list_processes()
             return ToolDecision(risk=risk, summary="List active processes", executor=executor)
 
+        if any(phrase in normalized for phrase in ["minimize current tab", "minimize current window", "minimize the current window", "minimize this window", "hide this window"]):
+            risk, executor = tool_window_control("minimize")
+            return ToolDecision(risk=risk, summary="Minimize the active window", executor=executor)
+
+        if any(phrase in normalized for phrase in ["maximize current tab", "maximize current window", "maximize the current window", "maximize this window"]):
+            risk, executor = tool_window_control("maximize")
+            return ToolDecision(risk=risk, summary="Maximize the active window", executor=executor)
+
+        if any(phrase in normalized for phrase in ["close current tab", "close current window", "close the current window", "close this window"]):
+            risk, executor = tool_window_control("close")
+            return ToolDecision(risk=risk, summary="Close the active window", executor=executor)
+
         kill_match = re.search(r"(?:kill|terminate|stop|close)\s+(?:process\s*)?(?:pid\s*)?(\d+)", normalized)
         if kill_match:
             pid = int(kill_match.group(1))
@@ -151,6 +172,11 @@ class AssistantCore:
             cmd = shell_request
             risk, executor = tool_shell(cmd)
             return ToolDecision(risk=risk, summary=f"Run shell command: {cmd}", executor=executor)
+
+        typing_request = self._extract_typed_text(original)
+        if typing_request is not None:
+            risk, executor = tool_type_text(typing_request)
+            return ToolDecision(risk=risk, summary=f"Type text into the active window: {typing_request}", executor=executor)
 
         return None
 
@@ -207,6 +233,8 @@ class AssistantCore:
             "- execute uptime\n"
             "- open firefox\n"
             "- launch terminal\n"
+            "- minimize current window\n"
+            "- type hello world\n"
             "- search web linux swap tuning\n"
             "- fix voice\n"
             "- shutdown / restart / sleep / lock (confirmation required)"
@@ -237,6 +265,23 @@ class AssistantCore:
             "- search web linux performance tuning\n"
             "- type help to see more commands"
         )
+
+    def _last_heard_text(self) -> str:
+        if not self._last_user_message:
+            return "I do not have a previous message yet."
+        return f"I heard: {self._last_user_message}"
+
+    @staticmethod
+    def _is_recall_request(lower: str) -> bool:
+        normalized = " ".join(re.sub(r"[^a-z0-9\s]", " ", lower).split())
+        return normalized in {
+            "what did i say",
+            "what did you hear",
+            "repeat what i said",
+            "repeat what you heard",
+            "show me what i said",
+            "show what i said",
+        }
 
     @staticmethod
     def _normalize_for_routing(text: str) -> str:
@@ -278,6 +323,21 @@ class AssistantCore:
                 return match.group(1).strip()
         return None
 
+    @classmethod
+    def _extract_typed_text(cls, original: str) -> str | None:
+        text = cls._normalize_for_routing(original)
+        patterns = [
+            r"^type\s+(.+)$",
+            r"^write\s+this\s+(.+)$",
+        ]
+        for pattern in patterns:
+            match = re.match(pattern, text)
+            if match:
+                candidate = match.group(1).strip().strip("'\"")
+                if candidate:
+                    return candidate
+        return None
+
     @staticmethod
     def _voice_setup_text() -> str:
         return (
@@ -285,6 +345,7 @@ class AssistantCore:
             "- Microphone recording uses arecord or ffmpeg in app/voice.py\n"
             "- Offline speech-to-text uses faster-whisper or whisper CLI\n"
             "- Spoken replies use Piper first, then spd-say / espeak-ng / espeak\n"
+            "- Desktop control for minimize/type needs xdotool or wmctrl on Linux\n"
             "- Free voice model files: https://huggingface.co/rhasspy/piper-voices\n"
             "- Free cloud key option for AI replies: https://console.groq.com/keys\n"
             "- Setup wizard: python3 -m app.setup_wizard\n"

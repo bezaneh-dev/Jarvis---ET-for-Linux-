@@ -64,12 +64,20 @@ class VoiceService:
         if not text:
             return False, "Text is empty."
 
+        cloud_failure_summary: str | None = None
+
         if settings.tts_mode in {"local", "hybrid"}:
             ok, summary = self._speak_with_piper(text)
             if ok:
                 return ok, summary
             if settings.tts_mode == "local":
                 return False, summary
+
+        if settings.tts_mode in {"cloud", "hybrid"} and settings.openai_api_key:
+            ok, summary = self._speak_openai(text)
+            if ok:
+                return ok, summary
+            cloud_failure_summary = summary
 
         for cmd in ["spd-say", "espeak-ng", "espeak"]:
             binary = shutil.which(cmd)
@@ -83,10 +91,14 @@ class VoiceService:
                     timeout=15,
                     check=False,
                 )
+                if cloud_failure_summary:
+                    return True, f"{cloud_failure_summary} Fell back to {cmd}."
                 return True, f"Speaking with {cmd}."
             except Exception:
                 continue
 
+        if cloud_failure_summary:
+            return False, cloud_failure_summary
         return False, "No TTS engine found. Text reply is still available."
 
     def _transcribe_faster_whisper(self, wav_path: str) -> tuple[bool, str, str]:
@@ -289,3 +301,75 @@ class VoiceService:
             return True, text, ""
         except Exception as exc:
             return False, "", f"Cloud transcription failed: {exc}"
+
+    def _speak_openai(self, text: str) -> tuple[bool, str]:
+        headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+        url = f"{settings.openai_base_url}/audio/speech"
+        fd, audio_path = tempfile.mkstemp(prefix="jarvis_cloud_tts_", suffix=".wav")
+        os.close(fd)
+
+        payload = {
+            "model": settings.openai_tts_model,
+            "voice": settings.openai_tts_voice,
+            "input": text,
+            "response_format": "wav",
+        }
+
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                if resp.is_error:
+                    return False, self._format_cloud_tts_error(resp)
+                Path(audio_path).write_bytes(resp.content)
+
+            ok, summary = self._play_audio_file(audio_path)
+            if ok:
+                return True, "Speaking with cloud TTS."
+            return False, summary
+        except Exception as exc:
+            return False, f"Cloud TTS failed: {exc}"
+        finally:
+            Path(audio_path).unlink(missing_ok=True)
+
+    @staticmethod
+    def _format_cloud_tts_error(resp: httpx.Response) -> str:
+        try:
+            payload = resp.json()
+        except Exception:
+            payload = {}
+
+        message = ""
+        if isinstance(payload, dict):
+            err = payload.get("error")
+            if isinstance(err, dict):
+                message = str(err.get("message", "")).strip()
+
+        if "model_terms_required" in str(payload) or "requires terms acceptance" in message.lower():
+            return (
+                "Cloud TTS needs one-time Groq model approval. "
+                "Open https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english and accept the terms."
+            )
+
+        if "decommissioned" in message.lower():
+            return f"Cloud TTS failed: {message}"
+
+        if message:
+            return f"Cloud TTS failed: {message}"
+        return f"Cloud TTS failed with status {resp.status_code}."
+
+    @staticmethod
+    def _play_audio_file(audio_path: str) -> tuple[bool, str]:
+        player = shutil.which("aplay") or shutil.which("paplay") or shutil.which("ffplay")
+        if player is None:
+            return False, "Audio player not found. Install alsa-utils or pulseaudio-utils."
+
+        if Path(player).name == "ffplay":
+            play_cmd = [player, "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path]
+        else:
+            play_cmd = [player, audio_path]
+
+        try:
+            subprocess.run(play_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=False)
+            return True, "Audio playback complete."
+        except Exception as exc:
+            return False, f"Audio playback failed: {exc}"

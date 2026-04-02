@@ -124,3 +124,45 @@ def test_voice_help_request_returns_setup_guidance() -> None:
     assert "Voice setup help" in resp.reply
     assert "app/voice.py" in resp.reply
     assert "console.groq.com/keys" in resp.reply
+
+
+def test_repeat_last_message_returns_previous_input() -> None:
+    core = AssistantCore()
+    core.handle_message("open firefox")
+
+    resp = core.handle_message("show me what i said")
+
+    assert "I heard: open firefox" in resp.reply
+
+
+def test_minimize_window_request_routes_to_window_tool(monkeypatch) -> None:
+    core = AssistantCore()
+
+    monkeypatch.setattr(
+        "app.assistant_core.tool_window_control",
+        lambda action: (
+            RiskLevel.medium,
+            lambda: ToolResult(ok=True, summary=f"Window action: {action}"),
+        ),
+    )
+
+    resp = core.handle_message("minimize the current window")
+
+    assert "Window action: minimize" in resp.reply
+
+
+def test_type_request_requires_confirmation(monkeypatch) -> None:
+    core = AssistantCore()
+
+    monkeypatch.setattr(
+        "app.assistant_core.tool_type_text",
+        lambda text: (
+            RiskLevel.high,
+            lambda: ToolResult(ok=True, summary=f"Typed: {text}"),
+        ),
+    )
+
+    resp = core.handle_message("type hello world")
+
+    assert resp.action_required is True
+    assert "Type text into the active window" in resp.reply

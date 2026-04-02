@@ -1,7 +1,9 @@
 from app.terminal import (
+    _capture_voice_input,
     _is_exit_command,
     _is_negative_reply,
     _is_positive_reply,
+    _looks_like_bad_repeat,
     _startup_greeting,
     _speak_startup_greeting,
     main,
@@ -73,3 +75,34 @@ def test_main_handles_keyboard_interrupt_in_voice_mode(monkeypatch, capsys) -> N
 
     output = capsys.readouterr().out
     assert "Goodbye." in output
+
+
+def test_capture_voice_input_prints_heard_text(monkeypatch, capsys, tmp_path) -> None:
+    audio = tmp_path / "sample.wav"
+    audio.write_bytes(b"fake")
+
+    class FakeVoice:
+        def record_wav(self, seconds: int = 0):
+            return True, "ok", str(audio)
+
+        def transcribe_file(self, _wav_path: str):
+            return True, "open firefox", ""
+
+    class FakeSettings:
+        assistant_name = "Jarvis"
+        voice_input_seconds = 4
+        voice_echo_input = True
+        voice_confirm_transcript = False
+
+    monkeypatch.setattr("app.terminal.settings", FakeSettings())
+
+    text = _capture_voice_input(FakeVoice())
+
+    output = capsys.readouterr().out
+    assert text == "open firefox"
+    assert "I heard: open firefox" in output
+
+
+def test_bad_repeat_detection_flags_short_repeats() -> None:
+    assert _looks_like_bad_repeat("thank you", 3) is True
+    assert _looks_like_bad_repeat("open firefox", 3) is False

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shlex
+import shutil
 import subprocess
 from typing import Callable
 
@@ -158,3 +159,51 @@ def _candidate_apps(app_name: str) -> tuple[str, ...]:
     if normalized in APP_ALIASES:
         return APP_ALIASES[normalized]
     return (app_name.strip(),)
+
+
+def tool_window_control(action: str) -> tuple[RiskLevel, Callable[[], ToolResult]]:
+    normalized = " ".join(action.lower().split())
+
+    def _exec() -> ToolResult:
+        xdotool = shutil.which("xdotool")
+        wmctrl = shutil.which("wmctrl")
+
+        if normalized == "minimize":
+            if xdotool:
+                return _run_command([xdotool, "getactivewindow", "windowminimize"])
+            if wmctrl:
+                return _run_command([wmctrl, "-r", ":ACTIVE:", "-b", "add,hidden"])
+            return ToolResult(ok=False, summary="No window control tool found. Install xdotool or wmctrl.")
+
+        if normalized == "maximize":
+            if wmctrl:
+                return _run_command([wmctrl, "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"])
+            return ToolResult(ok=False, summary="Maximize needs wmctrl. Install wmctrl.")
+
+        if normalized == "close":
+            if wmctrl:
+                return _run_command([wmctrl, "-c", ":ACTIVE:"])
+            if xdotool:
+                return _run_command([xdotool, "getactivewindow", "windowclose"])
+            return ToolResult(ok=False, summary="No window control tool found. Install xdotool or wmctrl.")
+
+        return ToolResult(ok=False, summary="Unsupported window action.")
+
+    risk = RiskLevel.high if normalized == "close" else RiskLevel.medium
+    return risk, _exec
+
+
+def tool_type_text(text: str) -> tuple[RiskLevel, Callable[[], ToolResult]]:
+    message = text.strip()
+
+    def _exec() -> ToolResult:
+        if not message:
+            return ToolResult(ok=False, summary="Text is empty.")
+
+        xdotool = shutil.which("xdotool")
+        if not xdotool:
+            return ToolResult(ok=False, summary="Typing control needs xdotool. Install xdotool.")
+
+        return _run_command([xdotool, "type", "--delay", "12", message])
+
+    return RiskLevel.high, _exec

@@ -66,9 +66,28 @@ def main() -> None:
 
 
 def _run_voice_loop(core: AssistantCore, voice: VoiceService) -> None:
+    last_message = ""
+    repeated_count = 0
+
     while True:
         message = _capture_voice_input(voice)
         if message is None:
+            continue
+
+        normalized = " ".join(message.lower().split())
+        if normalized == last_message:
+            repeated_count += 1
+        else:
+            last_message = normalized
+            repeated_count = 1
+
+        if _looks_like_bad_repeat(normalized, repeated_count):
+            warning = (
+                f"I keep hearing '{message}'. "
+                "Please move closer to the mic or switch to text mode for a moment."
+            )
+            print(f"{settings.assistant_name}> {warning}")
+            _speak_reply(voice, warning)
             continue
 
         if _is_exit_command(message):
@@ -104,8 +123,53 @@ def _capture_voice_input(voice: VoiceService) -> str | None:
         print(f"{settings.assistant_name}> {err}")
         return None
 
-    print(f"heard> {text}")
+    if settings.voice_echo_input:
+        print(f"{settings.assistant_name}> I heard: {text}")
+
+    if settings.voice_confirm_transcript:
+        confirmation = _confirm_transcript(voice, text)
+        if not confirmation:
+            print(f"{settings.assistant_name}> Okay, let's try again.")
+            return None
+
     return text
+
+
+def _confirm_transcript(voice: VoiceService, text: str) -> bool:
+    prompt = f"I heard: {text}. Say yes to continue or no to try again."
+    print(f"{settings.assistant_name}> {prompt}")
+    _speak_reply(voice, prompt)
+
+    message = _capture_voice_confirmation_answer(voice)
+    return message is True
+
+
+def _capture_voice_confirmation_answer(voice: VoiceService) -> bool | None:
+    for _ in range(2):
+        print(f"{settings.assistant_name}> Listening for confirmation...")
+        ok, summary, wav_path = voice.record_wav(seconds=3)
+        if not ok or wav_path is None:
+            print(f"{settings.assistant_name}> {summary}")
+            continue
+
+        try:
+            t_ok, text, err = voice.transcribe_file(wav_path)
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+
+        if not t_ok:
+            print(f"{settings.assistant_name}> {err}")
+            continue
+
+        if settings.voice_echo_input:
+            print(f"{settings.assistant_name}> Confirmation heard: {text}")
+
+        if _is_positive_reply(text):
+            return True
+        if _is_negative_reply(text):
+            return False
+
+    return None
 
 
 def _capture_voice_confirmation(voice: VoiceService, action_id: str) -> bool:
@@ -114,12 +178,10 @@ def _capture_voice_confirmation(voice: VoiceService, action_id: str) -> bool:
     _speak_reply(voice, prompt)
 
     for _ in range(2):
-        message = _capture_voice_input(voice)
-        if message is None:
-            continue
-        if _is_positive_reply(message):
+        message = _capture_voice_confirmation_answer(voice)
+        if message is True:
             return True
-        if _is_negative_reply(message):
+        if message is False:
             return False
         retry = "I did not catch that. Please say yes or no."
         print(f"{settings.assistant_name}> {retry}")
@@ -163,3 +225,16 @@ def _is_positive_reply(message: str) -> bool:
 def _is_negative_reply(message: str) -> bool:
     normalized = " ".join(message.lower().split())
     return normalized in {"no", "nope", "cancel", "deny", "stop"}
+
+
+def _looks_like_bad_repeat(message: str, repeated_count: int) -> bool:
+    short_noise = {
+        "thank you",
+        "thanks",
+        "hello",
+        "hi",
+        "hey",
+    }
+    if repeated_count < 3:
+        return False
+    return message in short_noise

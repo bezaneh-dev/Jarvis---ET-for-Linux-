@@ -72,6 +72,9 @@ def run_setup() -> None:
     api_key_default = values.get("OPENAI_API_KEY", "")
     base_default = values.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
     model_default = values.get("OPENAI_MODEL", "gpt-4o-mini")
+    stt_model_default = values.get("OPENAI_STT_MODEL", "whisper-1")
+    tts_model_default = values.get("OPENAI_TTS_MODEL", "canopylabs/orpheus-v1-english")
+    tts_voice_default = values.get("OPENAI_TTS_VOICE", "austin")
 
     if provider == "none":
         api_key_default = ""
@@ -79,6 +82,9 @@ def run_setup() -> None:
     elif provider == "groq":
         base_default = "https://api.groq.com/openai/v1"
         model_default = values.get("OPENAI_MODEL", "llama-3.3-70b-versatile")
+        stt_model_default = values.get("OPENAI_STT_MODEL", "whisper-large-v3-turbo")
+        tts_model_default = values.get("OPENAI_TTS_MODEL", "canopylabs/orpheus-v1-english")
+        tts_voice_default = values.get("OPENAI_TTS_VOICE", "austin")
 
     print("\nCredential links:")
     print("- Ollama local (no key): https://ollama.com/")
@@ -97,11 +103,13 @@ def run_setup() -> None:
         "OLLAMA_MODEL": values.get("OLLAMA_MODEL", "llama3.1:8b"),
         "AI_ROUTE_MODE": values.get("AI_ROUTE_MODE", "off" if provider == "none" else "hybrid"),
         "GREETING_ENABLED": values.get("GREETING_ENABLED", "true"),
-        "STT_MODE": values.get("STT_MODE", "local"),
+        "STT_MODE": values.get("STT_MODE", "cloud" if provider != "none" else "local"),
         "STT_LANGUAGE": values.get("STT_LANGUAGE", "en"),
         "FASTER_WHISPER_MODEL": values.get("FASTER_WHISPER_MODEL", "tiny"),
-        "OPENAI_STT_MODEL": values.get("OPENAI_STT_MODEL", "whisper-1"),
-        "TTS_MODE": values.get("TTS_MODE", "hybrid"),
+        "OPENAI_STT_MODEL": stt_model_default,
+        "TTS_MODE": values.get("TTS_MODE", "cloud" if provider != "none" else "hybrid"),
+        "OPENAI_TTS_MODEL": tts_model_default,
+        "OPENAI_TTS_VOICE": tts_voice_default,
         "PIPER_BIN": values.get("PIPER_BIN", "piper"),
         "PIPER_MODEL_PATH": _prompt("Piper model path (optional)", values.get("PIPER_MODEL_PATH", "")),
         "PIPER_SPEAKER_ID": values.get("PIPER_SPEAKER_ID", "0"),

@@ -102,6 +102,10 @@ TTS_MODE=hybrid
 
 If you choose provider `none`, Jarvis stays fully free-first.
 
+Detailed `.env` setup help lives in:
+
+- `ENV_SETUP.md`
+
 ## Optional Voice Stack
 
 Install basic voice packages:
@@ -115,6 +119,7 @@ Optional upgrades:
 
 - `faster-whisper` for offline speech-to-text
 - Piper for better voice output
+- `xdotool` or `wmctrl` for desktop control like minimize, close, and typing into the active window
 
 Piper setup example:
 
@@ -144,6 +149,34 @@ Free model/API options that work with this project:
 - Fully offline and free: `AI_ROUTE_MODE=off` plus `faster-whisper` and local TTS
 - Free local AI: install Ollama and keep `AI_ROUTE_MODE=local` or `hybrid`
 - Free cloud tier: set `CLOUD_PROVIDER=groq`, get a key from `https://console.groq.com/keys`, and use the OpenAI-compatible base URL already supported by the app
+
+Suggested free cloud setup for weak machines:
+
+```env
+CLOUD_PROVIDER=groq
+OPENAI_API_KEY=your_groq_key
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_MODEL=llama-3.3-70b-versatile
+OPENAI_STT_MODEL=whisper-large-v3-turbo
+OPENAI_TTS_MODEL=playai-tts
+OPENAI_TTS_VOICE=Fritz-PlayAI
+AI_ROUTE_MODE=cloud
+STT_MODE=cloud
+TTS_MODE=cloud
+```
+
+For desktop actions on Linux:
+
+```bash
+sudo apt install -y xdotool wmctrl
+```
+
+Example commands after that:
+
+- `minimize current window`
+- `maximize current window`
+- `close current window`
+- `type hello world`
 
 ## API Mode
 

@@ -32,6 +32,8 @@ class Settings:
     startup_voice_greeting: bool = os.getenv("STARTUP_VOICE_GREETING", "true").lower() == "true"
     voice_only_mode: bool = os.getenv("VOICE_ONLY_MODE", "true").lower() == "true"
     voice_input_seconds: int = int(os.getenv("VOICE_INPUT_SECONDS", "5"))
+    voice_echo_input: bool = os.getenv("VOICE_ECHO_INPUT", "true").lower() == "true"
+    voice_confirm_transcript: bool = os.getenv("VOICE_CONFIRM_TRANSCRIPT", "false").lower() == "true"
     assistant_name: str = os.getenv("ASSISTANT_NAME", "Jarvis")
     user_name: str = os.getenv("USER_NAME", "Boss")
 
@@ -41,6 +43,8 @@ class Settings:
     openai_stt_model: str = os.getenv("OPENAI_STT_MODEL", "whisper-1")
 
     tts_mode: str = os.getenv("TTS_MODE", "hybrid").lower()
+    openai_tts_model: str = os.getenv("OPENAI_TTS_MODEL", "canopylabs/orpheus-v1-english")
+    openai_tts_voice: str = os.getenv("OPENAI_TTS_VOICE", "austin")
     piper_bin: str = os.getenv("PIPER_BIN", "piper")
     piper_model_path: str = os.getenv("PIPER_MODEL_PATH", "")
     piper_speaker_id: int = int(os.getenv("PIPER_SPEAKER_ID", "0"))
